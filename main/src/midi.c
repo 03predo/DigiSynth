@@ -96,4 +96,5 @@ void init_midi(void){
   xMidiMsgHandle = xQueueCreateStatic(MIDI_MSG_QUEUE_LEN, sizeof(MidiMessage), xMidiMsgQueueBuf, &xMidiMsgQCB);
   xMidiProcHandle = xTaskCreateStatic(MidiProcTask, "xMidiProc", MIDI_RECV_STACK_SIZE, (void*)0, 1, xMidiProcStack, &xMidiProcTCB);
   xMidiRecvHandle = xTaskCreateStatic(MidiRecvTask, "xMidiRecv", MIDI_RECV_STACK_SIZE, (void*)0, 5, xMidiRecvStack, &xMidiRecvTCB);
+  ESP_LOGI(TAG, "midi initialized");
 }
