@@ -15,7 +15,7 @@ void app_main(void) {
   //esp_log_level_set("midi", ESP_LOG_DEBUG);
   //esp_log_level_set("pcm5102a", ESP_LOG_DEBUG);
 
-  //init_midi();
+  init_midi();
   init_pcm5102a();
 
   while(1){

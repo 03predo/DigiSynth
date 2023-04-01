@@ -9,6 +9,9 @@
 #include "driver/i2s_std.h"
 
 #include "osc.h"
+#include "midi.h"
+
+#pragma once
 
 #define PCM5102A_DOUT GPIO_NUM_27
 #define PCM5102A_BCK GPIO_NUM_32

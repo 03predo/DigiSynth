@@ -7,6 +7,8 @@
 #include "driver/uart.h"
 #include "driver/gpio.h"
 
+#pragma once
+
 #define MIDI_RECV_STACK_SIZE 4096
 #define MIDI_UART_PORT_NUM 2
 #define MIDI_UART_BAUD_RATE 31250
@@ -36,5 +38,6 @@ typedef struct MidiController {
 } MidiController;
 
 extern MidiController mc;
+extern SemaphoreHandle_t xMidiUpdateHandle;
 
 void init_midi(void);

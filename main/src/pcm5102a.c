@@ -1,6 +1,6 @@
 #include "pcm5102a.h"
 
-#define BLOCK_SIZE 1024
+#define BLOCK_SIZE 512
 
 Oscillator osc;
 
@@ -10,27 +10,25 @@ static TaskHandle_t xPcm5102aTxHandle;
 static StackType_t xPcm5102aTxStack[PCM5102A_TX_STACK_SIZE];
 static StaticTask_t xPcm5102aTxTCB;
 
-static TaskHandle_t xBlockGenHandle;
-static StackType_t xBlockGenStack[PCM5102A_TX_STACK_SIZE];
-static StaticTask_t xBlockGenTCB;
-
 static const char *TAG = "pcm5102a";
 
-static int16_t gen_buf[BLOCK_SIZE] = { 0 };
 static int16_t tx_buf[BLOCK_SIZE] = { 0 };
 
-static SemaphoreHandle_t xGenHandle;
-static StaticSemaphore_t xGenSCB;
 
-static SemaphoreHandle_t xCpyHandle;
-static StaticSemaphore_t xCpySCB;
+
+
+static IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx)
+{
+  xTaskResumeFromISR(xPcm5102aTxHandle);
+  return false;
+}
 
 void init_i2s(void){
   i2s_chan_config_t chan_cfg = {
     .id = I2S_NUM_AUTO,
     .role = I2S_ROLE_MASTER,
     .dma_desc_num = 6,      // number of buffers being used
-    .dma_frame_num = 2040,  // dma_frame_num <= ((4092 * 8) / (slot_num * data_bit_width)), rounded down to avoid byte loss
+    .dma_frame_num = 256,  // dma_frame_num <= ((4092 * 8) / (slot_num * data_bit_width)), rounded down to avoid byte loss
     .auto_clear = true,
   };
 
@@ -64,28 +62,33 @@ void init_i2s(void){
 
   i2s_channel_init_std_mode(pcm5102a_handle, &std_cfg);
 
+  i2s_event_callbacks_t cbs = {
+    .on_recv = NULL,
+    .on_recv_q_ovf = NULL,
+    .on_sent = NULL,
+    .on_send_q_ovf = NULL,
+  };
+  i2s_channel_register_event_callback(pcm5102a_handle, &cbs, NULL);
   i2s_channel_enable(pcm5102a_handle);
-}
-
-void BlockGenTask(void *parameters){
-  while(1){
-    for(int i = 0; i < BLOCK_SIZE; ++i){
-      gen_buf[i] = next_sample_16bit(&osc);
-    }
-    xSemaphoreGive(xGenHandle);
-    xSemaphoreTake(xCpyHandle, portMAX_DELAY);
-  }
-  vTaskDelete(NULL);
 }
 
 void Pcm5102aTxTask(void *parameters){
   size_t bytes_written = 0;
   while(1){
-    xSemaphoreTake(xGenHandle, portMAX_DELAY);
-    memcpy(tx_buf, gen_buf, BLOCK_SIZE * 2);
-    xSemaphoreGive(xCpyHandle);
-    i2s_channel_write(pcm5102a_handle, tx_buf, BLOCK_SIZE * 2, &bytes_written, 1000 / portTICK_PERIOD_MS);
-    if(bytes_written != BLOCK_SIZE * 2){
+    if(xSemaphoreTake(xMidiUpdateHandle, 1) == pdTRUE){
+      osc.frequency = mc.pitch;
+      osc.offset = mc.pitch / (16000 * 2);
+    }
+    if(mc.gate){
+      for(int i = 0; i < BLOCK_SIZE; ++i){
+        tx_buf[i] = next_sample_16bit(&osc);
+      }
+    }else{
+      memset(tx_buf, 0, BLOCK_SIZE * 2);
+    }
+    
+    i2s_channel_write(pcm5102a_handle, tx_buf, sizeof(tx_buf), &bytes_written, 1000 / portTICK_PERIOD_MS);
+    if(bytes_written != sizeof(tx_buf)){
       ESP_LOGI(TAG, "bytes_written=%d", bytes_written);
     }
   }
@@ -95,11 +98,8 @@ void Pcm5102aTxTask(void *parameters){
 }
 
 void init_pcm5102a(void){  
-  init_oscillator(&osc, &sin_wave, 0.50, 440);
+  init_oscillator(&osc, &square_wave, 0.50, 440);
   init_i2s();
-  xGenHandle = xSemaphoreCreateBinaryStatic(&xGenSCB);
-  xCpyHandle = xSemaphoreCreateBinaryStatic(&xCpySCB);
-  xBlockGenHandle = xTaskCreateStatic(BlockGenTask, "xPcm5102aTx", PCM5102A_TX_STACK_SIZE, (void*)0, 1, xBlockGenStack, &xBlockGenTCB);
-  xPcm5102aTxHandle = xTaskCreateStatic(Pcm5102aTxTask, "xPcm5102aTx", PCM5102A_TX_STACK_SIZE, (void*)0, 1, xPcm5102aTxStack, &xPcm5102aTxTCB);
+  xPcm5102aTxHandle = xTaskCreateStatic(Pcm5102aTxTask, "xPcm5102aTx", PCM5102A_TX_STACK_SIZE, (void*)0, 3, xPcm5102aTxStack, &xPcm5102aTxTCB);
   ESP_LOGI(TAG, "pcm5102a initialized");
 }
