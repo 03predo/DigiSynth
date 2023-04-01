@@ -3,6 +3,9 @@
 
 MidiController mc;
 
+SemaphoreHandle_t xMidiUpdateHandle;
+static StaticSemaphore_t xMidiUpdateSCB;
+
 static SemaphoreHandle_t xMidiControllerHandle;
 static StaticSemaphore_t xMidiControllerSCB;
 
@@ -56,7 +59,6 @@ void MidiRecvTask(void *parameters){
   vTaskDelete(NULL);
 }
 
-
 void MidiProcTask(void *parameters) {
   while(1){
     MidiMessage msg;
@@ -73,6 +75,7 @@ void MidiProcTask(void *parameters) {
           mc.gate = true;
           mc.pitch = MidiPitchMap[msg.f1];
           ESP_LOGD(TAG, "NOTE ON: pitch=%f, velocity=%d", MidiPitchMap[msg.f1], msg.f2);
+          xSemaphoreGive(xMidiUpdateHandle);
           break;
         case MOD_WHEEL:
           mc.mod_wheel = msg.f2;
@@ -87,12 +90,14 @@ void MidiProcTask(void *parameters) {
           break;
       }
       xSemaphoreGive(xMidiControllerHandle);
+      
     }
   }
 }
 
 void init_midi(void){
   xMidiControllerHandle = xSemaphoreCreateMutexStatic(&xMidiControllerSCB);
+  xMidiUpdateHandle = xSemaphoreCreateBinaryStatic(&xMidiUpdateSCB);
   xMidiMsgHandle = xQueueCreateStatic(MIDI_MSG_QUEUE_LEN, sizeof(MidiMessage), xMidiMsgQueueBuf, &xMidiMsgQCB);
   xMidiProcHandle = xTaskCreateStatic(MidiProcTask, "xMidiProc", MIDI_RECV_STACK_SIZE, (void*)0, 1, xMidiProcStack, &xMidiProcTCB);
   xMidiRecvHandle = xTaskCreateStatic(MidiRecvTask, "xMidiRecv", MIDI_RECV_STACK_SIZE, (void*)0, 5, xMidiRecvStack, &xMidiRecvTCB);
