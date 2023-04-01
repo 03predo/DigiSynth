@@ -6,7 +6,7 @@
 #pragma once
 
 #define SAMPLE_RATE 16000
-#define BIT_DEPTH 32
+#define BIT_DEPTH 16
 #define SAMPLE_TYPE(type) uint ## type ##  _t
 #define MAX_AMPLITUDE (1 << (BIT_DEPTH - 1)) - 1;
 

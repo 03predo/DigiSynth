@@ -40,5 +40,6 @@ void init_oscillator(Oscillator * osc, double(*wave_function)(double), double am
   osc->amplitude = amplitude;
   osc->frequency = frequency;
   osc->angle = 0.0;
-  osc->offset = frequency / SAMPLE_RATE;
+  // for some reason we are getting double the frequency on the output so this * 2 is a temp fix
+  osc->offset = frequency / (SAMPLE_RATE * 2); 
 }
