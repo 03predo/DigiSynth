@@ -34,7 +34,7 @@ void init_i2s(void){
   i2s_new_channel(&chang_cfg, &pcm5102a_handle, NULL);
 
   i2s_std_config_t std_cfg = {
-    .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(48000),
+    .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(16000),
     .slot_cfg = {
       .data_bit_width = 32,
       .slot_bit_width = 64,
@@ -64,7 +64,7 @@ void init_i2s(void){
   i2s_event_callbacks_t cbs = {
     .on_recv = NULL,
     .on_recv_q_ovf = NULL,
-    .on_sent = i2s_tx_callback,
+    .on_sent = NULL,
     .on_send_q_ovf = NULL,
   };
   i2s_channel_register_event_callback(pcm5102a_handle, &cbs, NULL);
@@ -72,12 +72,10 @@ void init_i2s(void){
 }
 
 void Pcm5102aTxTask(void *parameters){
-  for(int i = 0; i < BLOCK_SIZE; ++i){
-    src_buf[i] = next_sample_32bit(&osc);
-  }
-  i2s_channel_write(pcm5102a_handle, src_buf, BLOCK_SIZE, &bytes_written, 20 / portTICK_PERIOD_MS);
   while(1){
-    vTaskSuspend(NULL);
+    for(int i = 0; i < BLOCK_SIZE; ++i){
+      src_buf[i] = next_sample_32bit(&osc);
+    }
     i2s_channel_write(pcm5102a_handle, src_buf, sizeof(src_buf), &bytes_written, 500 / portTICK_PERIOD_MS);
     if(bytes_written != sizeof(src_buf)){
       ESP_LOGI(TAG, "bytes_written=%d", bytes_written);
@@ -89,7 +87,7 @@ void Pcm5102aTxTask(void *parameters){
 }
 
 void init_pcm5102a(void){  
-  init_oscillator(&osc, &sin_wave, 0.5, 440);
+  init_oscillator(&osc, &sin_wave, 0.10, 440);
   init_i2s();
   xPcm5102aTxHandle = xTaskCreateStatic(Pcm5102aTxTask, "xPcm5102aTx", PCM5102A_TX_STACK_SIZE, (void*)0, 1, xPcm5102aTxStack, &xPcm5102aTxTCB);
   ESP_LOGI(TAG, "pcm5102a initialized");
