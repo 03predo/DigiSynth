@@ -8,9 +8,10 @@ static TaskHandle_t xPcm5102aTxHandle;
 static StackType_t xPcm5102aTxStack[PCM5102A_TX_STACK_SIZE];
 static StaticTask_t xPcm5102aTxTCB;
 
+
 static const char *TAG = "pcm5102a";
 
-#define BLOCK_SIZE 2048
+#define BLOCK_SIZE 1024
 
 static int32_t src_buf[BLOCK_SIZE] ={ 0 };
 size_t bytes_written = 0;
@@ -22,7 +23,13 @@ static IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t
 }
 
 void init_i2s(void){
-  i2s_chan_config_t chang_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
+  i2s_chan_config_t chang_cfg = {
+    .id = I2S_NUM_AUTO,
+    .role = I2S_ROLE_MASTER,
+    .dma_desc_num = 6,
+    .dma_frame_num = 510,
+    .auto_clear = true,
+  };
 
   i2s_new_channel(&chang_cfg, &pcm5102a_handle, NULL);
 
@@ -64,18 +71,17 @@ void init_i2s(void){
   i2s_channel_enable(pcm5102a_handle);
 }
 
-
-
-void Pcm5102aTxTask(void * parameters){
+void Pcm5102aTxTask(void *parameters){
+  for(int i = 0; i < BLOCK_SIZE; ++i){
+    src_buf[i] = next_sample_32bit(&osc);
+  }
   i2s_channel_write(pcm5102a_handle, src_buf, BLOCK_SIZE, &bytes_written, 20 / portTICK_PERIOD_MS);
   while(1){
     vTaskSuspend(NULL);
-    for(int i = 0; i < BLOCK_SIZE; ++i){
-      src_buf[i] = next_sample_32bit(&osc);
-      //ESP_LOGI(TAG, "%ld", src_buf[i]);
+    i2s_channel_write(pcm5102a_handle, src_buf, sizeof(src_buf), &bytes_written, 500 / portTICK_PERIOD_MS);
+    if(bytes_written != sizeof(src_buf)){
+      ESP_LOGI(TAG, "bytes_written=%d", bytes_written);
     }
-    i2s_channel_write(pcm5102a_handle, src_buf, BLOCK_SIZE, &bytes_written, 100 / portTICK_PERIOD_MS);
-    
   }
   i2s_channel_disable(pcm5102a_handle);
   i2s_del_channel(pcm5102a_handle);
