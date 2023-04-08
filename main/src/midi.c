@@ -22,9 +22,31 @@ static TaskHandle_t xMidiProcHandle;
 static StackType_t xMidiProcStack[MIDI_RECV_STACK_SIZE];
 static StaticTask_t xMidiProcTCB;
 
-
+#define PITCHBEND_RANGE 1
+#define PITCHBEND_RATIO_MAX 1.12244
+#define PITCHBEND_RATIO_MIN 0.89081
+#define PITCHBEND_VALUE_MAX 0x7F7F
+#define PITCHBEND_VALUE_MID 0x4000
+#define PITCHBEND_VALUE_MIN 0x0000
 
 static const char *TAG = "midi";
+
+double pitchbend_to_pitch(double pitch, uint16_t pitch_bend){
+  if(pitch_bend < PITCHBEND_VALUE_MID){
+    double x = (double) pitch_bend / (PITCHBEND_VALUE_MID - PITCHBEND_VALUE_MIN);
+    double m = 1 - PITCHBEND_RATIO_MIN;
+    double b = (double) PITCHBEND_VALUE_MIN / (PITCHBEND_VALUE_MID - PITCHBEND_VALUE_MIN);
+    b *= m;
+    b = PITCHBEND_RATIO_MIN - b;
+    return m * x + b;
+  }
+  double x = (double) pitch_bend / (PITCHBEND_VALUE_MAX - PITCHBEND_VALUE_MID);
+  double m = PITCHBEND_RATIO_MAX - 1;
+  double b = (double) PITCHBEND_VALUE_MID / (PITCHBEND_VALUE_MAX - PITCHBEND_VALUE_MID);
+  b *= m;
+  b = 1 - b;
+  return m * x + b;
+}
 
 void MidiRecvTask(void *parameters){
   uart_config_t uart_config = {
@@ -60,21 +82,26 @@ void MidiRecvTask(void *parameters){
 }
 
 void MidiProcTask(void *parameters) {
+  mc.gate = 0;
+  mc.pitch_bend = 1;
   while(1){
     MidiMessage msg;
     if(xQueueReceive(xMidiMsgHandle, (void *)&msg, (TickType_t)portMAX_DELAY)){
+      
       uint8_t msg_id = msg.id >> 4;
       xSemaphoreTake(xMidiControllerHandle, 1000 / portTICK_PERIOD_MS);
       switch(msg_id){
         case NOTE_OFF:
-          mc.gate = false;
-          mc.pitch = MidiPitchMap[msg.f1];
-          ESP_LOGD(TAG, "NOTE OFF: pitch=%f, velocity=%d", MidiPitchMap[msg.f1], msg.f2);
+          if(mc.gate > 0){
+            mc.gate--;
+          }
+          ESP_LOGD(TAG, "NOTE OFF: mgs.f1=%d, pitch=%f, velocity=%d", msg.f1, MidiPitchMap[msg.f1], msg.f2);
+          xSemaphoreGive(xMidiUpdateHandle);
           break;
         case NOTE_ON:
-          mc.gate = true;
+          mc.gate++;
           mc.pitch = MidiPitchMap[msg.f1];
-          ESP_LOGD(TAG, "NOTE ON: pitch=%f, velocity=%d", MidiPitchMap[msg.f1], msg.f2);
+          ESP_LOGD(TAG, "NOTE ON: mgs.f1=%d, pitch=%f, velocity=%d", msg.f1, MidiPitchMap[msg.f1], msg.f2);
           xSemaphoreGive(xMidiUpdateHandle);
           break;
         case MOD_WHEEL:
@@ -82,8 +109,11 @@ void MidiProcTask(void *parameters) {
           ESP_LOGD(TAG, "MOD WHEEL: control_num=%d, control_val=%d", msg.f1, msg.f2);
           break;
         case PITCH_BEND:
-          mc.pitch_bend = msg.f2;
-          ESP_LOGD(TAG, "PITCH BEND: 0x%02X%02X", msg.f2, msg.f1);
+          //mc.pitch_bend = msg.f2;
+          uint16_t pb = (msg.f2 << 8) + (msg.f1);
+          mc.pitch_bend = pitchbend_to_pitch(mc.pitch, pb);
+          ESP_LOGD(TAG, "PITCH BEND: 0x%04X, pitch_bend=%f", pb, mc.pitch_bend);
+          xSemaphoreGive(xMidiUpdateHandle);
           break;
         default:
           ESP_LOGD(TAG, "msg_id=%X", msg_id);

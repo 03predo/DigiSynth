@@ -31,10 +31,10 @@ typedef struct MidiMessage {
 } MidiMessage;
 
 typedef struct MidiController {
-  bool gate;
+  uint8_t gate;
   double pitch;
   uint8_t mod_wheel;
-  uint8_t pitch_bend;
+  double pitch_bend;
 } MidiController;
 
 extern MidiController mc;
