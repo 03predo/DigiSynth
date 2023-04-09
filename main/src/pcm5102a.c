@@ -1,27 +1,20 @@
 #include "pcm5102a.h"
+#include "midi.h"
 
 #define BLOCK_SIZE 512
+#define STACK_SIZE 8192
 
 Oscillator osc;
 
 i2s_chan_handle_t pcm5102a_handle;
 
-static TaskHandle_t xPcm5102aTxHandle;
-static StackType_t xPcm5102aTxStack[PCM5102A_TX_STACK_SIZE];
+TaskHandle_t xPcm5102aTxHandle;
+static StackType_t xPcm5102aTxStack[STACK_SIZE];
 static StaticTask_t xPcm5102aTxTCB;
 
+static int32_t tx_buf[BLOCK_SIZE] = { 0 };
+
 static const char *TAG = "pcm5102a";
-
-static int16_t tx_buf[BLOCK_SIZE] = { 0 };
-
-
-
-
-static IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx)
-{
-  xTaskResumeFromISR(xPcm5102aTxHandle);
-  return false;
-}
 
 void init_i2s(void){
   i2s_chan_config_t chan_cfg = {
@@ -35,13 +28,13 @@ void init_i2s(void){
   i2s_new_channel(&chan_cfg, &pcm5102a_handle, NULL);
 
   i2s_std_config_t std_cfg = {
-    .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(16000),
+    .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(SAMPLE_RATE),
     .slot_cfg = {
-      .data_bit_width = 16,
-      .slot_bit_width = 32,
+      .data_bit_width = BIT_DEPTH,
+      .slot_bit_width = BIT_DEPTH * 2,
       .slot_mode = I2S_SLOT_MODE_MONO,
       .slot_mask = I2S_STD_SLOT_LEFT,
-      .ws_width = 16,
+      .ws_width = BIT_DEPTH,
       .ws_pol = false,
       .bit_shift = true,
       .msb_right = true,
@@ -74,19 +67,26 @@ void init_i2s(void){
 
 void Pcm5102aTxTask(void *parameters){
   size_t bytes_written = 0;
+  uint8_t gate = 0;
+  double pitch;
   while(1){
-    if(xSemaphoreTake(xMidiUpdateHandle, 1) == pdTRUE){
-      osc.frequency = mc.pitch;
-      osc.offset = mc.pitch / (16000 * 2);
+    uint32_t notification;
+    if(xTaskNotifyWait(0, 0xFFFFFFFF, &notification, 1) == pdTRUE){
+      if(notification & (1U << NOTE_OFF) ||
+         notification & (1U << NOTE_ON)  ||
+         notification & (1U << PITCH_BEND)){
+        pitch = mc.pitch * mc.pitch_bend;
+        osc.offset = pitch / (SAMPLE_RATE * 2);
+        gate = mc.gate;
+      }
     }
-    if(mc.gate){
+    if(gate > 0){
       for(int i = 0; i < BLOCK_SIZE; ++i){
-        tx_buf[i] = next_sample_16bit(&osc);
+        tx_buf[i] = next_sample(&osc);
       }
     }else{
-      memset(tx_buf, 0, BLOCK_SIZE * 2);
+      memset(tx_buf, 0, BLOCK_SIZE * BIT_DEPTH / 8);
     }
-    
     i2s_channel_write(pcm5102a_handle, tx_buf, sizeof(tx_buf), &bytes_written, 1000 / portTICK_PERIOD_MS);
     if(bytes_written != sizeof(tx_buf)){
       ESP_LOGI(TAG, "bytes_written=%d", bytes_written);
@@ -98,8 +98,8 @@ void Pcm5102aTxTask(void *parameters){
 }
 
 void init_pcm5102a(void){  
-  init_oscillator(&osc, &square_wave, 0.50, 440);
+  init_oscillator(&osc, &sawtooth_wave, 0.80, 440);
   init_i2s();
-  xPcm5102aTxHandle = xTaskCreateStatic(Pcm5102aTxTask, "xPcm5102aTx", PCM5102A_TX_STACK_SIZE, (void*)0, 3, xPcm5102aTxStack, &xPcm5102aTxTCB);
+  xPcm5102aTxHandle = xTaskCreateStatic(Pcm5102aTxTask, "xPcm5102aTx", STACK_SIZE, (void*)0, 3, xPcm5102aTxStack, &xPcm5102aTxTCB);
   ESP_LOGI(TAG, "pcm5102a initialized");
 }
