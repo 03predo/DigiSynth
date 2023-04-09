@@ -9,7 +9,6 @@
 #include "driver/i2s_std.h"
 
 #include "osc.h"
-#include "midi.h"
 
 #pragma once
 
@@ -18,5 +17,6 @@
 #define PCM5102A_WS GPIO_NUM_32
 #define PCM5102A_SAMPLE_RATE SAMPLE_RATE
 
+extern TaskHandle_t xPcm5102aTxHandle;
 
 void init_pcm5102a(void);

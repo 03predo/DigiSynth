@@ -1,5 +1,6 @@
 #include "midi.h"
 #include "midi_pitch_map.h"
+#include "pcm5102a.h"
 
 MidiController mc;
 
@@ -96,24 +97,23 @@ void MidiProcTask(void *parameters) {
             mc.gate--;
           }
           ESP_LOGD(TAG, "NOTE OFF: mgs.f1=%d, pitch=%f, velocity=%d", msg.f1, MidiPitchMap[msg.f1], msg.f2);
-          xSemaphoreGive(xMidiUpdateHandle);
+          xTaskNotify(xPcm5102aTxHandle, 1U << NOTE_OFF, eSetBits);
           break;
         case NOTE_ON:
           mc.gate++;
           mc.pitch = MidiPitchMap[msg.f1];
           ESP_LOGD(TAG, "NOTE ON: mgs.f1=%d, pitch=%f, velocity=%d", msg.f1, MidiPitchMap[msg.f1], msg.f2);
-          xSemaphoreGive(xMidiUpdateHandle);
+          xTaskNotify(xPcm5102aTxHandle, 1U << NOTE_ON, eSetBits);
           break;
         case MOD_WHEEL:
           mc.mod_wheel = msg.f2;
           ESP_LOGD(TAG, "MOD WHEEL: control_num=%d, control_val=%d", msg.f1, msg.f2);
           break;
         case PITCH_BEND:
-          //mc.pitch_bend = msg.f2;
           uint16_t pb = (msg.f2 << 8) + (msg.f1);
           mc.pitch_bend = pitchbend_to_pitch(mc.pitch, pb);
           ESP_LOGD(TAG, "PITCH BEND: 0x%04X, pitch_bend=%f", pb, mc.pitch_bend);
-          xSemaphoreGive(xMidiUpdateHandle);
+          xTaskNotify(xPcm5102aTxHandle, 1U << PITCH_BEND, eSetBits);
           break;
         default:
           ESP_LOGD(TAG, "msg_id=%X", msg_id);

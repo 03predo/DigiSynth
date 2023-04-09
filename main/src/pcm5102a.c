@@ -1,4 +1,5 @@
 #include "pcm5102a.h"
+#include "midi.h"
 
 #define BLOCK_SIZE 512
 #define STACK_SIZE 8192
@@ -7,7 +8,7 @@ Oscillator osc;
 
 i2s_chan_handle_t pcm5102a_handle;
 
-static TaskHandle_t xPcm5102aTxHandle;
+TaskHandle_t xPcm5102aTxHandle;
 static StackType_t xPcm5102aTxStack[STACK_SIZE];
 static StaticTask_t xPcm5102aTxTCB;
 
@@ -69,10 +70,15 @@ void Pcm5102aTxTask(void *parameters){
   uint8_t gate = 0;
   double pitch;
   while(1){
-    if(xSemaphoreTake(xMidiUpdateHandle, 1) == pdTRUE){
-      pitch = mc.pitch * mc.pitch_bend;
-      osc.offset = pitch / (SAMPLE_RATE * 2);
-      gate = mc.gate;
+    uint32_t notification;
+    if(xTaskNotifyWait(0, 0xFFFFFFFF, &notification, 1) == pdTRUE){
+      if(notification & (1U << NOTE_OFF) ||
+         notification & (1U << NOTE_ON)  ||
+         notification & (1U << PITCH_BEND)){
+        pitch = mc.pitch * mc.pitch_bend;
+        osc.offset = pitch / (SAMPLE_RATE * 2);
+        gate = mc.gate;
+      }
     }
     if(gate > 0){
       for(int i = 0; i < BLOCK_SIZE; ++i){
@@ -92,7 +98,7 @@ void Pcm5102aTxTask(void *parameters){
 }
 
 void init_pcm5102a(void){  
-  init_oscillator(&osc, &sin_wave, 0.50, 440);
+  init_oscillator(&osc, &sawtooth_wave, 0.80, 440);
   init_i2s();
   xPcm5102aTxHandle = xTaskCreateStatic(Pcm5102aTxTask, "xPcm5102aTx", STACK_SIZE, (void*)0, 3, xPcm5102aTxStack, &xPcm5102aTxTCB);
   ESP_LOGI(TAG, "pcm5102a initialized");
