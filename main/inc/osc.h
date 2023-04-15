@@ -12,10 +12,11 @@
 
 typedef struct Oscillator {
   double (*wave_function)(double);  // return value is [0, 1] and period is 1
-  double amplitude;                // value is [0, 1]
-  double frequency;                // number of wave function cycles per second
-  double offset;                   // step size per each sample, sample_rate / frequency
-  double angle;                    // current angle in wave function
+  double amplitude;                 // the current amplitude based on max amplitude, from [0, 1]
+  double max_amplitude;             // max amplitude value, from [0, 1]
+  double frequency;                 // number of wave function cycles per second
+  double offset;                    // step size per each sample, sample_rate / frequency
+  double angle;                     // current angle in wave function
 }Oscillator;
 
 double sin_wave(double x);

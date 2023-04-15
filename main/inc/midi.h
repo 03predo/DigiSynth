@@ -17,12 +17,12 @@
 
 #define MIDI_MSG_QUEUE_LEN 20
 
-enum MidiMessageID {
+typedef enum {
   NOTE_OFF = 0x8,
   NOTE_ON = 0x9,
   MOD_WHEEL = 0xB,
   PITCH_BEND = 0xE, // 0x4000 is middle, 0x7F7F is top, 0x0000 is bottom
-};
+}MidiMessageID;
 
 typedef struct MidiMessage {
   uint8_t id;

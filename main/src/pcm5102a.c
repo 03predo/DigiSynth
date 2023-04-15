@@ -1,10 +1,12 @@
 #include "pcm5102a.h"
 #include "midi.h"
+#include "env.h"
 
 #define BLOCK_SIZE 512
 #define STACK_SIZE 8192
 
 Oscillator osc;
+EnvelopeGenerator amp_env;
 
 i2s_chan_handle_t pcm5102a_handle;
 
@@ -72,20 +74,26 @@ void Pcm5102aTxTask(void *parameters){
   while(1){
     uint32_t notification;
     if(xTaskNotifyWait(0, 0xFFFFFFFF, &notification, 1) == pdTRUE){
-      if(notification & (1U << NOTE_OFF) ||
-         notification & (1U << NOTE_ON)  ||
-         notification & (1U << PITCH_BEND)){
+      if(notification & ((1U << NOTE_OFF) | (1U << NOTE_ON) | (1U << PITCH_BEND))){
         pitch = mc.pitch * mc.pitch_bend;
         osc.offset = pitch / (SAMPLE_RATE * 2);
         gate = mc.gate;
       }
     }
     if(gate > 0){
+      if(notification & (1U << NOTE_ON)){
+        osc.amplitude = process_envelope(&amp_env, NOTE_ON);
+      }
       for(int i = 0; i < BLOCK_SIZE; ++i){
         tx_buf[i] = next_sample(&osc);
+        osc.amplitude = process_envelope(&amp_env, 0);
       }
     }else{
-      memset(tx_buf, 0, BLOCK_SIZE * BIT_DEPTH / 8);
+      osc.amplitude = process_envelope(&amp_env, NOTE_OFF);
+      for(int i = 0; i < BLOCK_SIZE; ++i){
+        tx_buf[i] = next_sample(&osc);
+        osc.amplitude = process_envelope(&amp_env, 0);
+      }
     }
     i2s_channel_write(pcm5102a_handle, tx_buf, sizeof(tx_buf), &bytes_written, 1000 / portTICK_PERIOD_MS);
     if(bytes_written != sizeof(tx_buf)){
@@ -98,7 +106,17 @@ void Pcm5102aTxTask(void *parameters){
 }
 
 void init_pcm5102a(void){  
-  init_oscillator(&osc, &sawtooth_wave, 0.80, 440);
+  init_oscillator(&osc, &sawtooth_wave, 1, 440);
+  EnvelopeSettings settings = {
+    .attack_samples = 2000,
+    .attack_tco = 0.9,
+    .decay_samples = 40000,
+    .decay_tco = exp(-11.05),
+    .sustain_level = 0.5,
+    .release_samples = 40000,
+    .release_tco = exp(-11.5)
+  };
+  init_envelope(&amp_env, settings);
   init_i2s();
   xPcm5102aTxHandle = xTaskCreateStatic(Pcm5102aTxTask, "xPcm5102aTx", STACK_SIZE, (void*)0, 3, xPcm5102aTxStack, &xPcm5102aTxTCB);
   ESP_LOGI(TAG, "pcm5102a initialized");

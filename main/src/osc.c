@@ -17,7 +17,7 @@ double square_wave(double x){
 }
 
 double process(Oscillator * osc){
-  double sample = osc->amplitude * (*osc->wave_function)(osc->angle);
+  double sample = osc->amplitude * osc->max_amplitude * (*osc->wave_function)(osc->angle);
   osc->angle += osc->offset;
   if(osc->angle > 1){
     osc->angle = 0;
@@ -43,9 +43,10 @@ int32_t next_sample(Oscillator * osc){
 
 void init_oscillator(Oscillator * osc, double(*wave_function)(double), double amplitude, double frequency){
   osc->wave_function = wave_function;
-  osc->amplitude = amplitude;
+  osc->max_amplitude = amplitude;
   osc->frequency = frequency;
   osc->angle = 0.0;
+  osc->amplitude = 1.0;
   // for some reason we are getting double the frequency on the output so this * 2 is a temp fix
   osc->offset = frequency / (SAMPLE_RATE * 2); 
 }

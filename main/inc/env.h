@@ -3,12 +3,13 @@
 #include <math.h>
 #include "esp_log.h"
 
+#include "midi.h"
+
 #pragma once
 
 typedef struct {
   double coefficient;
   double offset;
-  double tco;
   double y_prev;
 }CurveGenerator;
 
@@ -26,7 +27,8 @@ typedef enum {
   ATTACK = 0,
   DECAY,
   SUSTAIN,
-  RELEASE
+  RELEASE,
+  OFF,
 }EnvelopeState;
 
 typedef struct {
@@ -44,5 +46,5 @@ void init_envelope(EnvelopeGenerator *env, EnvelopeSettings settings);
 
 double process_curve(CurveGenerator *curve);
 
-double process_envelope(EnvelopeGenerator *env);
+double process_envelope(EnvelopeGenerator *env, MidiMessageID event);
 
