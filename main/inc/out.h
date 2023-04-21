@@ -15,8 +15,9 @@
 #define PCM5102A_DOUT GPIO_NUM_33
 #define PCM5102A_BCK GPIO_NUM_27
 #define PCM5102A_WS GPIO_NUM_32
-#define PCM5102A_SAMPLE_RATE SAMPLE_RATE
 
-extern TaskHandle_t xPcm5102aTxHandle;
+#define OUTPUT_SAMPLE_RATE SAMPLE_RATE
 
-void init_pcm5102a(void);
+extern TaskHandle_t xOutputHandle;
+
+void init_output(void);

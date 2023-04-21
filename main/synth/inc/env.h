@@ -7,6 +7,20 @@
 
 #pragma once
 
+#define ENV_ATTACK_TCO 0.9
+#define ENV_DECAY_TCO exp(-11.05)
+#define ENV_RELEASE_TCO exp(-11.05)
+
+#define ENV_ATTACK_SAMPLES 2000
+#define ENV_DECAY_SAMPLES 400000
+#define ENV_SUSTAIN_LEVEL 0.5
+#define ENV_RELEASE_SAMPLES 40000
+
+#define ENV_ATTACK_SCALING 100
+#define ENV_DECAY_SCALING 1000
+#define ENV_SUSTAIN_SCALING 127
+#define ENV_RELEASE_SCALING 1000
+
 typedef struct {
   double coefficient;
   double offset;
@@ -41,6 +55,7 @@ typedef struct {
 }EnvelopeGenerator;
 
 
+void update_envelope(EnvelopeGenerator * env);
 
 void init_envelope(EnvelopeGenerator *env, EnvelopeSettings settings);
 

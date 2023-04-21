@@ -2,31 +2,33 @@
 
 static const char *TAG = "env";
 
-void init_envelope(EnvelopeGenerator *env, EnvelopeSettings settings){
+void update_envelope(EnvelopeGenerator * env){
   // init attack curve values
-  env->attack.coefficient = exp((-log((1 + settings.attack_tco) / settings.attack_tco) / settings.attack_samples));
-  env->attack.offset = (1 + settings.attack_tco) * (1 - env->attack.coefficient);
-  env->attack.y_prev = 0;
+  env->attack.coefficient = exp((-log((1 + env->settings.attack_tco) / env->settings.attack_tco) / env->settings.attack_samples));
+  env->attack.offset = (1 + env->settings.attack_tco) * (1 - env->attack.coefficient);
 
   // init decay curve values
-  env->decay.coefficient = exp((-log((1 + settings.decay_tco) / settings.decay_tco) / settings.decay_samples));
-  env->decay.offset = (settings.sustain_level - settings.decay_tco) * (1 - env->decay.coefficient);
-  env->decay.y_prev = 1;
+  env->decay.coefficient = exp((-log((1 + env->settings.decay_tco) / env->settings.decay_tco) / env->settings.decay_samples));
+  env->decay.offset = (env->settings.sustain_level - env->settings.decay_tco) * (1 - env->decay.coefficient);
 
   // init release curve values
-  env->release.coefficient = exp((-log((1 + settings.release_tco) / settings.release_tco) / settings.release_samples));
-  env->release.offset = (0 - settings.release_tco) * (1 - env->release.coefficient);
-  env->decay.y_prev = 1;
+  env->release.coefficient = exp((-log((1 + env->settings.release_tco) / env->settings.release_tco) / env->settings.release_samples));
+  env->release.offset = (0 - env->settings.release_tco) * (1 - env->release.coefficient);
+}
 
-  env->amplitude_prev = 0;
+void init_envelope(EnvelopeGenerator *env, EnvelopeSettings settings){
   env->settings = settings;
+  update_envelope(env);
+  env->attack.y_prev = 0;
+  env->decay.y_prev = 1;
+  env->decay.y_prev = 1;
+  env->amplitude_prev = 0;
   env->state = OFF;
 }
 
 double process_curve(CurveGenerator *curve){
   double ret = curve->y_prev;
   curve->y_prev = curve->offset + curve->coefficient * curve->y_prev;
-  //ESP_LOGI(TAG, "process_cruver: ret=%f, offset=%f, coeff=%f, y_prev=%f", ret, curve->offset, curve->coefficient, curve->y_prev);
   return ret;
 }
 
