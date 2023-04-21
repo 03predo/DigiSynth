@@ -1,6 +1,6 @@
 #include "midi.h"
 #include "midi_pitch_map.h"
-#include "pcm5102a.h"
+#include "out.h"
 
 MidiController mc;
 
@@ -97,23 +97,42 @@ void MidiProcTask(void *parameters) {
             mc.gate--;
           }
           ESP_LOGD(TAG, "NOTE OFF: mgs.f1=%d, pitch=%f, velocity=%d", msg.f1, MidiPitchMap[msg.f1], msg.f2);
-          xTaskNotify(xPcm5102aTxHandle, 1U << NOTE_OFF, eSetBits);
+          xTaskNotify(xOutputHandle, 1U << NOTE_OFF, eSetBits);
           break;
         case NOTE_ON:
           mc.gate++;
           mc.pitch = MidiPitchMap[msg.f1];
           ESP_LOGD(TAG, "NOTE ON: mgs.f1=%d, pitch=%f, velocity=%d", msg.f1, MidiPitchMap[msg.f1], msg.f2);
-          xTaskNotify(xPcm5102aTxHandle, 1U << NOTE_ON, eSetBits);
+          xTaskNotify(xOutputHandle, 1U << NOTE_ON, eSetBits);
           break;
-        case MOD_WHEEL:
-          mc.mod_wheel = msg.f2;
-          ESP_LOGD(TAG, "MOD WHEEL: control_num=%d, control_val=%d", msg.f1, msg.f2);
+        case CTRL:
+          if(msg.f1 == MIDI_MOD_WHEEL_CTRL_NUM){
+            mc.mod_wheel = msg.f2;
+            ESP_LOGD(TAG, "MOD WHEEL: control_val=%d", msg.f2);
+          }else if((msg.f1 >= MIDI_FADER_BANK_BASE) && (msg.f1 < MIDI_FADER_BANK_BASE + MIDI_FADER_BANK_SIZE)){
+            mc.fader_bank[msg.f1 - MIDI_FADER_BANK_BASE] = msg.f2;
+            ESP_LOGD(TAG, "FADER%d: control_val=%d", msg.f1 - MIDI_FADER_BANK_BASE, msg.f2);
+          }else if((msg.f1 >= MIDI_KNOB_BANK_BASE) && (msg.f1 < MIDI_KNOB_BANK_BASE + MIDI_FADER_BANK_SIZE)){
+            mc.knob_bank[msg.f1 - MIDI_KNOB_BANK_BASE] = msg.f2;
+            ESP_LOGD(TAG, "KNOB%d: control_val=%d", msg.f1 - MIDI_KNOB_BANK_BASE, msg.f2);
+          }else if((msg.f1 >= MIDI_BUTTON_BANK_BASE) && (msg.f1 < MIDI_BUTTON_BANK_BASE + MIDI_BUTTON_BANK_SIZE)){
+            if(msg.f2 == 127){
+              mc.button_bank = mc.button_bank | (1 << (msg.f1 - MIDI_BUTTON_BANK_BASE));
+            }else{
+              mc.button_bank = mc.button_bank & (~(1 << (msg.f1 - MIDI_BUTTON_BANK_BASE)));
+            }
+            ESP_LOGD(TAG, "BUTTON%d: control_val=%d, button_bank=%d", msg.f1 - MIDI_BUTTON_BANK_BASE, msg.f2, mc.button_bank);
+          }else{
+            ESP_LOGD(TAG, "CTRL: control_num=%d, control_val=%d", msg.f1, msg.f2);
+          }
+          
+          xTaskNotify(xOutputHandle, 1U << CTRL, eSetBits);
           break;
         case PITCH_BEND:
           uint16_t pb = (msg.f2 << 8) + (msg.f1);
           mc.pitch_bend = pitchbend_to_pitch(mc.pitch, pb);
           ESP_LOGD(TAG, "PITCH BEND: 0x%04X, pitch_bend=%f", pb, mc.pitch_bend);
-          xTaskNotify(xPcm5102aTxHandle, 1U << PITCH_BEND, eSetBits);
+          xTaskNotify(xOutputHandle, 1U << PITCH_BEND, eSetBits);
           break;
         default:
           ESP_LOGD(TAG, "msg_id=%X", msg_id);
