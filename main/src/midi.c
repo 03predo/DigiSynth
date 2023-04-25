@@ -1,8 +1,11 @@
 #include "midi.h"
 #include "midi_pitch_map.h"
 #include "out.h"
+#include "lifo.h"
 
 MidiController mc;
+
+Lifo active_notes;
 
 SemaphoreHandle_t xMidiUpdateHandle;
 static StaticSemaphore_t xMidiUpdateSCB;
@@ -96,12 +99,18 @@ void MidiProcTask(void *parameters) {
           if(mc.gate > 0){
             mc.gate--;
           }
+          lifo_remove(&active_notes, msg.f1);
+          ESP_LOGD(TAG, "active_note=%d", active_notes.buf[active_notes.curr_pos]);
+          if(active_notes.buf[active_notes.curr_pos] != 0){
+            mc.pitch = MidiPitchMap[active_notes.buf[active_notes.curr_pos]];
+          }
           ESP_LOGD(TAG, "NOTE OFF: mgs.f1=%d, pitch=%f, velocity=%d", msg.f1, MidiPitchMap[msg.f1], msg.f2);
           xTaskNotify(xOutputHandle, 1U << NOTE_OFF, eSetBits);
           break;
         case NOTE_ON:
           mc.gate++;
           mc.pitch = MidiPitchMap[msg.f1];
+          lifo_push(&active_notes, msg.f1);
           ESP_LOGD(TAG, "NOTE ON: mgs.f1=%d, pitch=%f, velocity=%d", msg.f1, MidiPitchMap[msg.f1], msg.f2);
           xTaskNotify(xOutputHandle, 1U << NOTE_ON, eSetBits);
           break;
@@ -145,6 +154,7 @@ void MidiProcTask(void *parameters) {
 }
 
 void init_midi(void){
+  lifo_init(&active_notes);
   xMidiControllerHandle = xSemaphoreCreateMutexStatic(&xMidiControllerSCB);
   xMidiUpdateHandle = xSemaphoreCreateBinaryStatic(&xMidiUpdateSCB);
   xMidiMsgHandle = xQueueCreateStatic(MIDI_MSG_QUEUE_LEN, sizeof(MidiMessage), xMidiMsgQueueBuf, &xMidiMsgQCB);
