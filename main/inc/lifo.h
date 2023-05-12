@@ -2,7 +2,9 @@
 #include <stdint.h>
 #include "esp_log.h"
 
-#define LIFO_SIZE 5
+#pragma once
+
+#define LIFO_SIZE 20
 
 typedef struct {
   uint8_t buf[LIFO_SIZE];

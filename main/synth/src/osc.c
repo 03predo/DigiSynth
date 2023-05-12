@@ -20,7 +20,7 @@ double process(Oscillator * osc){
   double sample = osc->amplitude * osc->max_amplitude * (*osc->wave_function)(osc->angle);
   osc->angle += osc->offset;
   if(osc->angle > 1){
-    osc->angle = 0;
+    osc->angle--;
   }
   return sample;
 }

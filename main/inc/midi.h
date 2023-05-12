@@ -7,6 +7,8 @@
 #include "driver/uart.h"
 #include "driver/gpio.h"
 
+#include "lifo.h"
+
 #pragma once
 
 #define MIDI_RECV_STACK_SIZE 4096
@@ -52,6 +54,7 @@ typedef struct MidiMessage {
 
 typedef struct MidiController {
   uint8_t gate;
+  Lifo active_notes;
   double pitch;
   uint8_t mod_wheel;
   uint8_t fader_bank[MIDI_FADER_BANK_SIZE];
